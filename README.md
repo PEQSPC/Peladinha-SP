@@ -20,6 +20,49 @@ Players are given a fixed amount of play tokens (fake money) to start. A game is
 
 Built with React, Material UI, Express, TypeScript, PostgreSQL (Knex), and WhatsApp notifications via Twilio.
 
+## Request Flow
+
+```
+Client (Browser / Mobile)
+        │
+        ▼
+  ┌──────────────────────────────┐
+  │  Express Server (index.ts)   │
+  │  - JSON body parse           │
+  │  - Static /uploads serve     │
+  │  - Health check (/health)    │
+  └────────┬─────────────────────┘
+           │
+           ▼
+  ┌──────────────────────────────┐
+  │  Router Layer (routes/)      │
+  │  - /players  → players.ts    │
+  │  - /games    → games.ts      │
+  │  - /games/:id/players → att. │
+  └────────┬─────────────────────┘
+           │
+     ┌─────┴─────┐
+     ▼           ▼
+┌──────────┐ ┌──────────┐
+│ Services │ │ Database │
+│ .ts      │ │ (knex)   │
+│          │ │          │
+│ pricing  │ │ players  │
+│ parser   │ │ games    │
+│ whatsapp │ │ g_players│
+│ cron     │ │          │
+└──────────┘ └──────────┘
+     │
+     ▼
+  Twilio WhatsApp API
+
+Examples:
+  GET  /players          →  DB query  →  JSON array of players
+  POST /games            →  Parse Playtomic msg →  INSERT game  →  201 JSON
+  POST /games/:id/complete →  UPDATE status →  Twilio to all attendees  →  200 JSON
+  cron (every 5h)        →  DB query unpaid →  Twilio reminders
+```
+
 ## How to run this project
 
 ### Docker

@@ -118,12 +118,12 @@ In tests, Twilio is mocked at the `whatsapp.ts` service boundary (Jest mock). In
 
 | Test | Scenario | Expected |
 |------|----------|----------|
-| Fires on due game | Game with `remind_at` in the past, `reminder_sent_at = null` | Twilio mock called for each unpaid player; `reminder_sent_at` set |
-| Does not fire for sent game | `reminder_sent_at` already set | Twilio mock NOT called |
-| Does not fire early | `remind_at` in the future | Twilio mock NOT called |
-| Handles Twilio failure | Twilio mock throws | `reminder_sent_at` remains null; error logged |
+| Fires every 5h to unpaid players | Unpaid attendance records exist across non-done games | Twilio mock called for each unpaid player |
+| Skips paid players | All players marked paid | Twilio mock NOT called |
+| Skips completed games | Game status is `done` | Twilio mock NOT called for that game's players |
+| Handles Twilio failure | Twilio mock throws | Error logged, loop continues to next player |
 
-Use Jest fake timers to control `Date.now()`.
+Cron expression: `0 */5 * * *` (every 5 hours at minute 0).
 
 ---
 

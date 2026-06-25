@@ -129,11 +129,11 @@ Both use the Twilio WhatsApp sandbox in development and the Twilio WhatsApp Busi
 
 ## 9. Reminder Scheduling
 
-- Organizer sets `remind_at` (datetime) when creating or editing a game.
-- `node-cron` runs every 15 minutes inside the Express process.
-- Query: `games WHERE remind_at <= NOW() AND reminder_sent_at IS NULL`
-- On match: sends WhatsApp to every player in `game_players` where `paid = false`, then sets `reminder_sent_at = NOW()`.
-- If Twilio fails: error is logged, `reminder_sent_at` is NOT set → retried on next cron tick.
+- `node-cron` runs **every 5 hours** (`0 */5 * * *`) inside the Express process.
+- Query: all `game_players` rows where `paid = false`, joined with `games` where `status != 'done'`.
+- On fire: sends WhatsApp reminder to every unpaid player across all non-completed games.
+- If Twilio fails for a player: error is logged, loop continues to next player.
+- No `remind_at` or `reminder_sent_at` gating — runs purely on a fixed schedule.
 
 ---
 

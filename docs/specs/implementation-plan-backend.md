@@ -614,7 +614,9 @@ File: `src/services/reminderJob.ts` | Tests: `src/services/reminderJob.test.ts`
 
 Export `runReminderCheck()` separately from the cron schedule so it is directly testable.
 
-### 11.1 — Sends reminders for due games
+The cron runs **every 5 hours** and sends WhatsApp reminders to all unpaid players across all games that are not yet `done`. There is no `remind_at` gating — it simply finds any unpaid attendance record and reminds the player.
+
+### 11.1 — Sends reminders to all unpaid players
 
 🔴 RED:
 ```typescript
@@ -623,38 +625,34 @@ import { sendMessage } from './whatsapp'
 import { runReminderCheck } from './reminderJob'
 import { db } from '../db/knex'
 
-test('sends WhatsApp to unpaid players and sets reminder_sent_at', async () => {
-  // seed game: remind_at = 1 hour ago, reminder_sent_at = null, 1 unpaid player
+test('sends WhatsApp to all unpaid players across non-done games', async () => {
+  // seed 2 games (status=scheduled), each with 1 unpaid player
   await runReminderCheck()
-  expect(sendMessage).toHaveBeenCalledTimes(1)
-  const game = await db('games').where({ id: gameId }).first()
-  expect(game.reminder_sent_at).not.toBeNull()
+  expect(sendMessage).toHaveBeenCalledTimes(2)
 })
 ```
 🟢 GREEN — create `reminderJob.ts`, implement `runReminderCheck()` and `startReminderJob()`.
 
-### 11.2 — Does not re-send if already sent
+### 11.2 — Does not remind players who already paid
 
-🔴 RED — `reminder_sent_at` already set → `sendMessage` not called.
-🟢 GREEN — `WHERE reminder_sent_at IS NULL` handles it; verify passes.
+🔴 RED — mark all paid → `sendMessage` not called.
+🟢 GREEN — `WHERE paid = false` handles it; verify passes.
 
-### 11.3 — Does not fire for future remind_at
+### 11.3 — Does not remind for completed games
 
-🔴 RED — `remind_at` = 1 hour in the future → `sendMessage` not called.
-🟢 GREEN — `WHERE remind_at <= NOW()` handles it; verify passes.
+🔴 RED — game status is `done` → `sendMessage` not called for that game's players.
+🟢 GREEN — join with `games` and filter `WHERE games.status != 'done'`; verify passes.
 
-### 11.4 — Twilio failure leaves reminder_sent_at null
+### 11.4 — Twilio failure does not crash the cron
 
 🔴 RED:
 ```typescript
 (sendMessage as jest.Mock).mockRejectedValueOnce(new Error('Twilio down'))
-await runReminderCheck()
-const game = await db('games').where({ id: gameId }).first()
-expect(game.reminder_sent_at).toBeNull()
+await runReminderCheck()  // should not throw
 ```
-🟢 GREEN — wrap send in try/catch; skip `UPDATE reminder_sent_at` on error.
+🟢 GREEN — wrap each send in try/catch; log error and continue to next player.
 
-**11.5** Wire `startReminderJob()` in `src/index.ts` inside `require.main === module` block.
+**11.5** Wire `startReminderJob()` in `src/index.ts` inside `require.main === module` block with `cron.schedule('0 */5 * * *', runReminderCheck)`.
 
 ---
 
