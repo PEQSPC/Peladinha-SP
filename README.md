@@ -1,20 +1,63 @@
 # Peladinha-SP
 
-A peladinha entre amigos virar jogo de website
-conseguir fazer apostas live na equipa que vai ganhar.
-Aplicaçao de Sao Paio para a marcaçao de jogos e pagamentos que ja foram feitos automatizado o jogador que pagar marca na aplicaçao com comprovativo do playatomic e distribui para os restantes jogadores serao notificados no final do jogo
-marca se o jogo quem vai jogar e depois vai for pagar vai distribuir pelas pessoas o dinheiro
-marcar o resultado do jogo
-registar jogadores e golos
-no final do ano os jogadores com pior rank pagam um jantar
-ao envez de dinheiro dar pontos as pessoas para apostar nas equipas 
+A friendly betting game among friends, built as a web app.
+
+Players are given a fixed amount of play tokens (fake money) to start. A game is created and confirmed via PlayAtomic. Players pay real money to participate (e.g. court costs). If a player brings outside players, those players pay real money to the player who brought them. Once the game is set up, players place their live bets using fake tokens on which team will win. After the game, token stakes are distributed among the winners and final results are recorded.
+
+### Features
+
+- Players start with a fixed amount of play tokens (fake money)
+- Create and schedule games, confirmed via PlayAtomic
+- Real money payment system for game participation (e.g. court costs)
+- Track who pays whom when a player brings outside players
+- Place and confirm bets using play tokens on which team will win
+- Distribute token winnings automatically to winners
+- Record final scores and track player rankings
+- Upload and save game videos if the match is recorded
+- Scorecard to display game results and player rankings
+- Ranking system with weighted token gains/losses (higher-ranked players lose more tokens when they lose, lower-ranked players lose less)
+- End-of-season ranking: bottom-ranked players buy dinner
+
+Built with React, Material UI, Express, TypeScript, PostgreSQL (Knex), and WhatsApp notifications via Twilio.
 
 ## How to run this project
+
+### Docker
+
+Build the image:
+```bash
+cd backend
+yarn docker:build
+```
+
+Run the server (foreground):
+```bash
+yarn docker:run
+```
+
+Run as a daemon (production-like):
+```bash
+yarn docker:run:prod
+```
+
+
+### Local development
+
+```bash
+cd backend
+yarn install
+yarn dev
+```
+
+The API runs on `http://localhost:3000`.
 
 
 ## tools used
 Appflowy for agile development
 yarn
+react
+material ui
 express js
 typescript
 knex migrations
+docker

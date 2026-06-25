@@ -9,7 +9,11 @@
   "scripts": {
     "dev": "nodemon --exec tsx src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "test": "jest",
+    "docker:build": "docker build -t peladinha-sp-backend .",
+    "docker:run": "docker run -p 3000:3000 peladinha-sp-backend",
+    "docker:run:prod": "docker run -d -p 3000:3000 --name peladinha-sp peladinha-sp-backend"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
@@ -23,6 +27,13 @@
     "ts-node": "^10.9.2",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/src/**/*.test.ts"
+    ]
   },
   "dependencies": {
     "express": "^5.2.1"
