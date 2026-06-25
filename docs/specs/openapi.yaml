@@ -1,0 +1,592 @@
+openapi: "3.1.0"
+info:
+  title: Peladinha-SP API
+  description: |
+    REST API for the Peladinha-SP friendly football betting app.
+    Manages players, games, attendance, and WhatsApp notifications via Twilio.
+  version: "1.0.0"
+  contact:
+    name: Peladinha-SP
+    url: https://github.com/PEQSPC/Peladinha-SP
+
+servers:
+  - url: http://localhost:3000
+    description: Local development
+  - url: http://localhost:5173/api
+    description: Via Vite dev proxy (frontend)
+
+paths:
+  # ───────────────────────────── Health ─────────────────────────────
+  /health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      tags: [System]
+      responses:
+        "200":
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  # ───────────────────────────── Players ─────────────────────────────
+  /players:
+    get:
+      summary: List all players
+      operationId: listPlayers
+      tags: [Players]
+      responses:
+        "200":
+          description: Array of registered players
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Player"
+
+    post:
+      summary: Create a new player
+      operationId: createPlayer
+      tags: [Players]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [name, phone]
+              properties:
+                name:
+                  type: string
+                  description: Player display name
+                  example: Teles Gomes
+                phone:
+                  type: string
+                  description: International phone number
+                  example: "+351****5678"
+                photo:
+                  type: string
+                  format: binary
+                  description: Player photo (JPEG/PNG, max 5MB)
+      responses:
+        "201":
+          description: Player created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Player"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "413":
+          description: Photo exceeds 5MB limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /players/{id}:
+    patch:
+      summary: Update a player
+      operationId: updatePlayer
+      tags: [Players]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                phone:
+                  type: string
+                photo:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Player updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Player"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ───────────────────────────── Games ─────────────────────────────
+  /games:
+    get:
+      summary: List all games
+      description: Games are ordered by date descending. Frontend groups by year.
+      operationId: listGames
+      tags: [Games]
+      responses:
+        "200":
+          description: Array of games
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Game"
+
+    post:
+      summary: Create a game
+      operationId: createGame
+      tags: [Games]
+      description: |
+        Create a game either by pasting a Playtomic share message or by entering
+        fields manually. If `raw_message` is provided, date/time/location are
+        extracted from it and any manually provided values for those fields are ignored.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGameRequest"
+      responses:
+        "201":
+          description: Game created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Game"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+
+  /games/{id}:
+    get:
+      summary: Get game detail with attendees
+      operationId: getGame
+      tags: [Games]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Game detail with computed amount_due per player
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    patch:
+      summary: Update game fields
+      operationId: updateGame
+      tags: [Games]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateGameRequest"
+      responses:
+        "200":
+          description: Game updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Game"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ───────────────────────────── Attendance ─────────────────────────────
+  /games/{id}/players:
+    post:
+      summary: Set attendance list for a game
+      description: |
+        Replaces the entire attendance list. In `total` pricing mode,
+        `price_per_player` is recalculated after the change.
+      operationId: setAttendance
+      tags: [Attendance]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [player_ids]
+              properties:
+                player_ids:
+                  type: array
+                  items:
+                    type: integer
+                  description: Array of player IDs to mark as attending
+                  example: [1, 3, 7]
+      responses:
+        "200":
+          description: Attendance set
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  attending:
+                    type: integer
+                    example: 3
+                  price_per_player:
+                    type: string
+                    example: "20.00"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /games/{id}/players/{playerId}:
+    patch:
+      summary: Update a player's attendance record
+      description: |
+        Toggle paid status or update guest count. In `total` mode,
+        changing guests_count triggers price_per_player recalculation.
+      operationId: updateAttendee
+      tags: [Attendance]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: playerId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                paid:
+                  type: boolean
+                  description: Whether the player has paid
+                  example: true
+                guests_count:
+                  type: integer
+                  description: Number of extra people this player brought
+                  minimum: 0
+                  example: 2
+      responses:
+        "200":
+          description: Attendee updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttendeeRecord"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ───────────────────────────── Actions ─────────────────────────────
+  /games/{id}/complete:
+    post:
+      summary: Mark game as done and notify via WhatsApp
+      description: |
+        Sets game status to `done`, records `completed_at`, and sends
+        a WhatsApp message to all attendees via Twilio.
+      operationId: completeGame
+      tags: [Actions]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Game completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [done]
+                    example: done
+                  completed_at:
+                    type: string
+                    format: date-time
+                    example: "2026-06-12T23:15:00Z"
+                  whatsapp_sent:
+                    type: integer
+                    description: Number of WhatsApp messages sent
+                    example: 8
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Game already marked done
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /games/{id}/remind:
+    post:
+      summary: Send WhatsApp reminder to unpaid players
+      description: |
+        Sends a reminder message to all unpaid players in this game.
+        Returns the count of messages sent (0 if everyone has paid).
+      operationId: remindUnpaid
+      tags: [Actions]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Reminder sent (or no one to remind)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reminded:
+                    type: integer
+                    description: Number of reminder messages sent
+                    example: 3
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  schemas:
+    # ──── Shared ────
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Human-readable error message
+          example: "name and phone are required"
+
+    # ──── Player ────
+    Player:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Teles Gomes
+        phone:
+          type: string
+          example: "+351****5678"
+        photo_url:
+          type: string
+          nullable: true
+          example: "/uploads/players/1.jpg"
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-06-12T10:00:00Z"
+
+    # ──── Game ────
+    Game:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 5
+        date:
+          type: string
+          format: date
+          nullable: true
+          example: "2026-06-12"
+        time:
+          type: string
+          nullable: true
+          example: "21:00"
+        location:
+          type: string
+          example: Braga
+        playtomic_url:
+          type: string
+          nullable: true
+          example: "https://app.playtomic.com/matches/abc123"
+        status:
+          type: string
+          enum: [scheduled, done]
+          example: scheduled
+        pricing_mode:
+          type: string
+          enum: [per_player, total]
+          example: total
+        price_per_player:
+          type: string
+          nullable: true
+          example: "6.00"
+        total_amount:
+          type: string
+          nullable: true
+          example: "60.00"
+        remind_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-06-14T09:00:00Z"
+        reminder_sent_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    GameDetail:
+      allOf:
+        - $ref: "#/components/schemas/Game"
+        - type: object
+          properties:
+            players:
+              type: array
+              items:
+                $ref: "#/components/schemas/Attendee"
+
+    Attendee:
+      allOf:
+        - $ref: "#/components/schemas/Player"
+        - type: object
+          properties:
+            guests_count:
+              type: integer
+              example: 1
+            paid:
+              type: boolean
+              example: false
+            amount_due:
+              type: string
+              description: Computed amount = price_per_player × (1 + guests_count)
+              example: "12.00"
+
+    AttendeeRecord:
+      type: object
+      properties:
+        game_id:
+          type: integer
+          example: 5
+        player_id:
+          type: integer
+          example: 1
+        guests_count:
+          type: integer
+          example: 2
+        paid:
+          type: boolean
+          example: true
+        amount_due:
+          type: string
+          example: "18.00"
+
+    # ──── Request bodies ────
+    CreateGameRequest:
+      type: object
+      required: [pricing_mode]
+      properties:
+        raw_message:
+          type: string
+          description: Playtomic share message (extracts date/time/location)
+          example: "JOGO NO FUT7 !\n\n 📅 sexta-feira, 12, 21:00 (15min)\n 📍 Braga\n ✅ Teles Gomes\nhttps://app.playtomic.com/matches/abc123"
+        date:
+          type: string
+          format: date
+          description: Required if raw_message not provided
+        time:
+          type: string
+          description: Required if raw_message not provided
+        location:
+          type: string
+          description: Required if raw_message not provided
+        pricing_mode:
+          type: string
+          enum: [per_player, total]
+        price_per_player:
+          type: number
+          description: Required in per_player mode
+        total_amount:
+          type: number
+          description: Required in total mode
+        remind_at:
+          type: string
+          format: date-time
+          description: Optional scheduled reminder time
+
+    UpdateGameRequest:
+      type: object
+      properties:
+        remind_at:
+          type: string
+          format: date-time
+          nullable: true
+        pricing_mode:
+          type: string
+          enum: [per_player, total]
+        price_per_player:
+          type: number
+          nullable: true
+        total_amount:
+          type: number
+          nullable: true
+
+  responses:
+    ValidationError:
+      description: Invalid or missing fields
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+tags:
+  - name: System
+    description: Health check endpoints
+  - name: Players
+    description: Player roster CRUD operations
+  - name: Games
+    description: Game scheduling and management
+  - name: Attendance
+    description: Player attendance per game
+  - name: Actions
+    description: Game completion and WhatsApp notifications
